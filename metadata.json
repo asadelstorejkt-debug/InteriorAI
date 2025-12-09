@@ -1,0 +1,5 @@
+{
+  "name": "InteriorAI",
+  "description": "A modern interior design analysis tool that identifies styles and generates shopping lists from uploaded photos using Gemini AI.",
+  "requestFramePermissions": []
+}
