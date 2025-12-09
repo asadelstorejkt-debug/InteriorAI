@@ -78,3 +78,49 @@ export const analyzeInteriorImage = async (base64Image: string, mimeType: string
     throw new Error("Failed to analyze the image. Please try again.");
   }
 };
+
+export const generateVisualizedDesign = async (
+  base64Image: string, 
+  style: string, 
+  items: string[],
+  mimeType: string = "image/jpeg"
+): Promise<string> => {
+  try {
+    const cleanBase64 = base64Image.replace(/^data:image\/(png|jpeg|jpg|webp);base64,/, "");
+    
+    // Construct a prompt that asks the model to edit the image
+    const itemsList = items.join(', ');
+    const prompt = `Photorealistic interior design edit. Keep the room structure exactly the same. Add the following items to the room in a ${style} style: ${itemsList}. Ensure the lighting and perspective match the original photo.`;
+
+    const response = await ai.models.generateContent({
+      model: 'gemini-2.5-flash-image',
+      contents: {
+        parts: [
+          {
+            inlineData: {
+              data: cleanBase64,
+              mimeType: mimeType,
+            },
+          },
+          {
+            text: prompt,
+          },
+        ],
+      },
+    });
+
+    // Extract the image from the response
+    if (response.candidates && response.candidates[0].content && response.candidates[0].content.parts) {
+      for (const part of response.candidates[0].content.parts) {
+        if (part.inlineData && part.inlineData.data) {
+          return `data:image/png;base64,${part.inlineData.data}`;
+        }
+      }
+    }
+
+    throw new Error("No image generated.");
+  } catch (error) {
+    console.error("Error generating visualization:", error);
+    throw new Error("Failed to generate design visualization.");
+  }
+};
