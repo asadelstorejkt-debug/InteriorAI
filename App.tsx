@@ -1,13 +1,18 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import Header from './components/Header';
 import ImageUploader from './components/ImageUploader';
 import AnalysisResult from './components/AnalysisResult';
 import ShoppingList from './components/ShoppingList';
 import { AnalysisResult as AnalysisResultType, UploadStatus } from './types';
 import { analyzeInteriorImage, generateVisualizedDesign } from './services/geminiService';
-import { RefreshCw, AlertCircle, Wand2, Eye, Layout } from 'lucide-react';
+import { RefreshCw, AlertCircle, Wand2, Eye, Layout, Key, ExternalLink } from 'lucide-react';
 
 const App: React.FC = () => {
+  // Authentication State
+  const [apiKeyReady, setApiKeyReady] = useState(false);
+  const [isCheckingKey, setIsCheckingKey] = useState(true);
+
+  // App State
   const [status, setStatus] = useState<UploadStatus>(UploadStatus.IDLE);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [originalBase64, setOriginalBase64] = useState<string | null>(null);
@@ -18,6 +23,48 @@ const App: React.FC = () => {
   const [showGenerated, setShowGenerated] = useState(false);
   
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+
+  // Check API Key on Mount
+  useEffect(() => {
+    const checkApiKey = async () => {
+      // 1. Check if process.env.API_KEY is already available (e.g. local .env)
+      if (process.env.API_KEY) {
+        setApiKeyReady(true);
+        setIsCheckingKey(false);
+        return;
+      }
+
+      // 2. Check via AI Studio helper (if running in that environment)
+      if (window.aistudio) {
+        try {
+          const hasKey = await window.aistudio.hasSelectedApiKey();
+          setApiKeyReady(hasKey);
+        } catch (e) {
+          console.error("Error checking API key status:", e);
+          setApiKeyReady(false);
+        }
+      } else {
+        // No key found and not in AI Studio environment
+        setApiKeyReady(false);
+      }
+      setIsCheckingKey(false);
+    };
+    checkApiKey();
+  }, []);
+
+  const handleConnectApiKey = async () => {
+    if (window.aistudio) {
+      try {
+        await window.aistudio.openSelectKey();
+        // Assume success if promise resolves (race condition mitigation as per guidelines)
+        setApiKeyReady(true);
+      } catch (e) {
+        console.error("Failed to select API key:", e);
+        // If error contains "Requested entity was not found", we might want to prompt again, 
+        // but generally just letting them try clicking again is safe.
+      }
+    }
+  };
 
   const handleImageSelected = async (base64: string, url: string) => {
     setPreviewUrl(url);
@@ -70,6 +117,68 @@ const App: React.FC = () => {
     setShowGenerated(false);
   };
 
+  // --- Render: Loading State ---
+  if (isCheckingKey) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-neutral-50 text-neutral-400">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-neutral-800"></div>
+      </div>
+    );
+  }
+
+  // --- Render: API Key Setup Screen ---
+  if (!apiKeyReady) {
+    return (
+      <div className="min-h-screen bg-neutral-50 flex flex-col items-center justify-center p-6 font-sans text-neutral-900">
+        <div className="max-w-md w-full bg-white rounded-2xl shadow-sm border border-neutral-200 p-8 text-center space-y-6 animate-fade-in-up">
+          <div className="w-16 h-16 bg-neutral-100 rounded-full flex items-center justify-center mx-auto mb-2">
+            <Key className="w-8 h-8 text-neutral-600" />
+          </div>
+          
+          <div>
+            <h2 className="text-2xl font-semibold tracking-tight mb-3">Authentication Required</h2>
+            {window.aistudio ? (
+              <p className="text-neutral-500 text-sm leading-relaxed">
+                To use InteriorAI, you need to connect your Google Gemini API key. 
+                Please select a project with billing enabled.
+              </p>
+            ) : (
+              <p className="text-neutral-500 text-sm leading-relaxed">
+                API Key is missing. Please create a <code>.env</code> file in your project root with <code>API_KEY=your_key_here</code> to continue.
+              </p>
+            )}
+          </div>
+
+          {window.aistudio ? (
+            <div className="space-y-4 pt-2">
+              <button 
+                onClick={handleConnectApiKey}
+                className="w-full py-3 px-4 bg-neutral-900 hover:bg-neutral-800 text-white rounded-xl font-medium transition-all shadow-md hover:shadow-lg flex items-center justify-center gap-2"
+              >
+                Connect API Key
+              </button>
+              <div className="pt-2">
+                <a 
+                  href="https://ai.google.dev/gemini-api/docs/billing" 
+                  target="_blank" 
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-1.5 text-xs text-neutral-400 hover:text-neutral-600 transition-colors"
+                >
+                  Billing Information <ExternalLink className="w-3 h-3" />
+                </a>
+              </div>
+            </div>
+          ) : (
+            <div className="p-3 bg-neutral-100 rounded-lg text-xs font-mono text-neutral-600 break-all">
+              process.env.API_KEY is undefined
+            </div>
+          )}
+        </div>
+      </div>
+    );
+  }
+
+  // --- Render: Main App ---
   return (
     <div className="min-h-screen bg-neutral-50 text-neutral-900 selection:bg-neutral-200">
       <Header />
