@@ -1,12 +1,23 @@
 import { GoogleGenAI, Type } from "@google/genai";
 import { AnalysisResult } from "../types";
 
-// Initialize Gemini Client
-// We assume process.env.API_KEY is available as per instructions.
-const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+// Helper to get the client safely at runtime
+const getAiClient = () => {
+  // Ensure process.env.API_KEY is available. 
+  // If running in a build environment like Vite without correct replacement, this might need configuration.
+  const apiKey = process.env.API_KEY;
+  
+  if (!apiKey) {
+    throw new Error("API Key is missing. Please ensure process.env.API_KEY is configured in your environment.");
+  }
+  
+  return new GoogleGenAI({ apiKey });
+};
 
 export const analyzeInteriorImage = async (base64Image: string, mimeType: string = "image/jpeg"): Promise<AnalysisResult> => {
   try {
+    const ai = getAiClient();
+    
     // Clean base64 string if it contains data URI prefix
     const cleanBase64 = base64Image.replace(/^data:image\/(png|jpeg|jpg|webp);base64,/, "");
 
@@ -75,6 +86,10 @@ export const analyzeInteriorImage = async (base64Image: string, mimeType: string
 
   } catch (error) {
     console.error("Error analyzing image:", error);
+    // Re-throw with a clean message that will be displayed in the UI
+    if (error instanceof Error) {
+        throw error;
+    }
     throw new Error("Failed to analyze the image. Please try again.");
   }
 };
@@ -86,6 +101,7 @@ export const generateVisualizedDesign = async (
   mimeType: string = "image/jpeg"
 ): Promise<string> => {
   try {
+    const ai = getAiClient();
     const cleanBase64 = base64Image.replace(/^data:image\/(png|jpeg|jpg|webp);base64,/, "");
     
     // Construct a prompt that asks the model to edit the image
